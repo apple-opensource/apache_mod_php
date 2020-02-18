@@ -17,8 +17,6 @@
    +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -42,7 +40,11 @@ struct _notationIterator {
 	xmlNotation *notation;
 };
 
-static void itemHashScanner (void *payload, void *data, xmlChar *name) /* {{{ */
+#if LIBXML_VERSION >= 20908
+static void itemHashScanner (void *payload, void *data, const xmlChar *name) /* {{{ */
+#else
+static void itemHashScanner (void *payload, void *data, xmlChar *name)
+#endif
 {
 	nodeIterator *priv = (nodeIterator *)data;
 
@@ -197,8 +199,8 @@ static void php_dom_iterator_move_forward(zend_object_iterator *iter) /* {{{ */
 			objmap->nodetype != XML_NOTATION_NODE) {
 			if (objmap->nodetype == DOM_NODESET) {
 				nodeht = HASH_OF(&objmap->baseobj_zv);
-				zend_hash_move_forward(nodeht);
-				if ((entry = zend_hash_get_current_data(nodeht))) {
+				zend_hash_move_forward_ex(nodeht, &iterator->pos);
+				if ((entry = zend_hash_get_current_data_ex(nodeht, &iterator->pos))) {
 					zval_ptr_dtor(&iterator->curobj);
 					ZVAL_UNDEF(&iterator->curobj);
 					ZVAL_COPY(&iterator->curobj, entry);
@@ -243,7 +245,7 @@ err:
 }
 /* }}} */
 
-zend_object_iterator_funcs php_dom_iterator_funcs = {
+static const zend_object_iterator_funcs php_dom_iterator_funcs = {
 	php_dom_iterator_dtor,
 	php_dom_iterator_valid,
 	php_dom_iterator_current_data,
@@ -264,7 +266,8 @@ zend_object_iterator *php_dom_get_iterator(zend_class_entry *ce, zval *object, i
 	php_dom_iterator *iterator;
 
 	if (by_ref) {
-		zend_error(E_ERROR, "An iterator cannot be used with foreach by reference");
+		zend_throw_error(NULL, "An iterator cannot be used with foreach by reference");
+		return NULL;
 	}
 	iterator = emalloc(sizeof(php_dom_iterator));
 	zend_iterator_init(&iterator->intern);
@@ -281,8 +284,8 @@ zend_object_iterator *php_dom_get_iterator(zend_class_entry *ce, zval *object, i
 			objmap->nodetype != XML_NOTATION_NODE) {
 			if (objmap->nodetype == DOM_NODESET) {
 				nodeht = HASH_OF(&objmap->baseobj_zv);
-				zend_hash_internal_pointer_reset(nodeht);
-				if ((entry = zend_hash_get_current_data(nodeht))) {
+				zend_hash_internal_pointer_reset_ex(nodeht, &iterator->pos);
+				if ((entry = zend_hash_get_current_data_ex(nodeht, &iterator->pos))) {
 					ZVAL_COPY(&iterator->curobj, entry);
 				}
 			} else {

@@ -16,7 +16,6 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id$ */
 #ifdef PHP_WIN32
 
 #include "php.h"
@@ -63,7 +62,7 @@ TODO:
 PHP_FUNCTION(readlink)
 {
 	char *link;
-	size_t link_len;
+	ssize_t link_len;
 	char target[MAXPATHLEN];
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "p", &link, &link_len) == FAILURE) {
@@ -74,7 +73,8 @@ PHP_FUNCTION(readlink)
 		RETURN_FALSE;
 	}
 
-	if (php_sys_readlink(link, target, MAXPATHLEN) == -1) {
+	link_len = php_sys_readlink(link, target, MAXPATHLEN);
+	if (link_len == -1) {
 		php_error_docref(NULL, E_WARNING, "readlink failed to read the symbolic link (%s), error %d)", link, GetLastError());
 		RETURN_FALSE;
 	}
@@ -87,6 +87,7 @@ PHP_FUNCTION(readlink)
 PHP_FUNCTION(linkinfo)
 {
 	char *link;
+	char *dirname;
 	size_t link_len;
 	zend_stat_t sb;
 	int ret;
@@ -95,12 +96,22 @@ PHP_FUNCTION(linkinfo)
 		return;
 	}
 
+	dirname = estrndup(link, link_len);
+	php_dirname(dirname, link_len);
+
+	if (php_check_open_basedir(dirname)) {
+		efree(dirname);
+		RETURN_FALSE;
+	}
+
 	ret = VCWD_STAT(link, &sb);
 	if (ret == -1) {
 		php_error_docref(NULL, E_WARNING, "%s", strerror(errno));
+		efree(dirname);
 		RETURN_LONG(Z_L(-1));
 	}
 
+	efree(dirname);
 	RETURN_LONG((zend_long) sb.st_dev);
 }
 /* }}} */
